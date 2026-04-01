@@ -4,6 +4,8 @@ import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.models.llama.modeling_llama import LlamaMLP
 from huggingface_hub import login
+from lm_eval import evaluator, tasks
+from lm_eval.models.huggingface import HFLM
 
 from sparsificaiton import SparseMLP, replace_nested_module
 
@@ -25,6 +27,7 @@ if __name__ == "__main__":
                 if counter < 10:
                     counter+=1
                     continue
+                print(name)
                 to_replace_names_modules[name] = module
                 break
 
@@ -33,7 +36,7 @@ if __name__ == "__main__":
             replace_nested_module(model, name, sparseBlock)
             
 
-    print(model)
+    # print(model)
 
     #input_text = "How to learn japanese in three easy steps before the week is over? (It's friday)"
     input_text = "What is Python?"
@@ -48,3 +51,22 @@ if __name__ == "__main__":
     decoded = tokenizer.decode(outputs[0])
 
     print(decoded)
+
+    # Evaluate model
+
+    model = HFLM(
+        pretrained=model,
+        device="mps:0"
+    )
+
+    # Run evaluation on a single task
+    results = evaluator.simple_evaluate(
+        model=model,
+        tasks=["arc_easy"],
+        num_fewshot=0,
+        limit=100,
+        batch_size=8
+    )
+
+    # Print accuracy
+    print(f"Accuracy: {results['results']['arc_easy']}")
