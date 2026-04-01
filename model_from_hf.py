@@ -19,13 +19,19 @@ if __name__ == "__main__":
     to_replace_names_modules = {}
 
     with torch.no_grad():
+        counter = 0
         for name, module in model.named_modules():
             if isinstance(module, LlamaMLP):
+                if counter < 10:
+                    counter+=1
+                    continue
                 to_replace_names_modules[name] = module
+                break
 
         for name, module in to_replace_names_modules.items():
             sparseBlock = SparseMLP(module)
             replace_nested_module(model, name, sparseBlock)
+            
 
     print(model)
 
