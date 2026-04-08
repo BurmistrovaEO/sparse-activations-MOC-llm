@@ -15,17 +15,14 @@ class SparseMLP(nn.Module):
         self.act_fn = base_layer.act_fn
         self.k_max = self.up_proj.in_features
         self.k_min = self.up_proj.in_features//2
-        print(self.k_max)
         #TODO: check boundary and throw exception if needed
         self.k = k
 
     def forward(self, x):
         gate_out = self.gate_proj(x)
-        #print(gate_out.shape)
         _, indices = torch.topk(gate_out, self.k, dim=-1, largest=True)
         mask = torch.zeros_like(gate_out, dtype=torch.bool)
         mask.scatter_(dim=-1, index=indices, value=True)
-        print(torch.count_nonzero(mask, dim=-1))
 
         gate_out = gate_out * mask
 
@@ -35,7 +32,6 @@ class SparseMLP(nn.Module):
         act_out = self.act_fn(gate_out)
 
         down_proj = self.down_proj(act_out * up_out)
-        #print(down_proj)
         return down_proj
 
 def replace_nested_module(model, name, new_module):
