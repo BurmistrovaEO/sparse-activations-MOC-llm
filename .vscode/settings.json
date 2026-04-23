@@ -1,0 +1,4 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python.defaultInterpreterPath": "/Users/kateburmr/venvs/shad_ml_venv/bin/python3.10"
+}
