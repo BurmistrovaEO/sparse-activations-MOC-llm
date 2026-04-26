@@ -1,20 +1,21 @@
-import json
-from pathlib import Path
-
-import torch
 from lm_eval import evaluator
 from lm_eval.models.huggingface import HFLM
 from peft import PeftModel
 from transformers import AutoTokenizer
 
 from experiment_configs import EvalConfig
-from model_utils import build_model, resolve_device_for_lm_eval, select_dtype
+from io_utils import save_json
+from model_utils import (
+    build_model,
+    device_string_to_torch,
+    resolve_device_for_lm_eval,
+    select_dtype,
+)
 
 
 def run_lm_eval(config: EvalConfig) -> dict:
     device = resolve_device_for_lm_eval(config.device)
-    device_for_dtype = torch.device("cuda") if device.startswith("cuda") else torch.device(device)
-    dtype = select_dtype(device_for_dtype)
+    dtype = select_dtype(device_string_to_torch(device))
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_name_or_path, use_fast=True)
     model = build_model(
@@ -39,8 +40,5 @@ def run_lm_eval(config: EvalConfig) -> dict:
         limit=config.limit,
     )
 
-    output_path = Path(config.output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+    save_json(config.output_path, results)
     return results

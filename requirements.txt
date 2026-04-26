@@ -5,3 +5,5 @@ accelerate
 peft
 huggingface_hub
 lm-eval
+black
+ruff

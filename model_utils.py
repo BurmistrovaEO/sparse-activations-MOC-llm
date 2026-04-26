@@ -4,7 +4,9 @@ import torch
 from transformers import AutoModelForCausalLM
 from transformers.models.llama.modeling_llama import LlamaMLP
 
-from sparsificaiton import SparseMLP, replace_nested_module
+from sparsification import SparseMLP, replace_nested_module
+
+SUPPORTED_MODES = {"baseline", "sparse"}
 
 
 def resolve_device(device_arg: str) -> torch.device:
@@ -31,6 +33,10 @@ def resolve_device_for_lm_eval(device_arg: str) -> str:
     if device.type == "cuda":
         return "cuda:0"
     return device.type
+
+
+def device_string_to_torch(device: str) -> torch.device:
+    return torch.device("cuda" if device.startswith("cuda") else device)
 
 
 def select_dtype(device: torch.device) -> torch.dtype:
@@ -82,6 +88,9 @@ def build_model(
     sparse_k: int = 4096,
     sparse_layers: list[int] | None = None,
 ) -> AutoModelForCausalLM:
+    if mode not in SUPPORTED_MODES:
+        raise ValueError(f"Unsupported mode '{mode}'. Expected one of: {sorted(SUPPORTED_MODES)}")
+
     model = load_base_model(
         model_name_or_path=model_name_or_path,
         trust_remote_code=trust_remote_code,

@@ -1,11 +1,9 @@
-import json
+import gc
 import math
 import os
 import time
-import gc
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from typing import Any
 
 import torch
 from datasets import DatasetDict, load_dataset
@@ -20,6 +18,7 @@ from transformers import (
 )
 
 from experiment_configs import TrainConfig
+from io_utils import save_json
 from model_utils import build_model, resolve_device, select_dtype
 
 
@@ -38,7 +37,9 @@ class RunMetrics:
 
 
 class ThroughputAndMemoryCallback(TrainerCallback):
-    def __init__(self, seq_len: int, per_device_train_batch_size: int, grad_accum: int, device_type: str):
+    def __init__(
+        self, seq_len: int, per_device_train_batch_size: int, grad_accum: int, device_type: str
+    ):
         self.seq_len = seq_len
         self.per_device_train_batch_size = per_device_train_batch_size
         self.grad_accum = grad_accum
@@ -61,7 +62,12 @@ class ThroughputAndMemoryCallback(TrainerCallback):
     def approx_tokens_per_second(self, train_steps_per_second: float | None) -> float | None:
         if train_steps_per_second is None:
             return None
-        return train_steps_per_second * self.per_device_train_batch_size * self.grad_accum * self.seq_len
+        return (
+            train_steps_per_second
+            * self.per_device_train_batch_size
+            * self.grad_accum
+            * self.seq_len
+        )
 
 
 def prepare_model(config: TrainConfig, dtype: torch.dtype) -> AutoModelForCausalLM:
@@ -165,13 +171,6 @@ def build_training_args(config: TrainConfig, device: torch.device) -> TrainingAr
     )
 
 
-def save_json(path: str, payload: dict[str, Any]) -> None:
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False)
-
-
 def adapt_config_for_device(config: TrainConfig, device: torch.device) -> TrainConfig:
     runtime_config = config
     if device.type == "cuda" and torch.cuda.is_available():
@@ -198,7 +197,7 @@ def adapt_config_for_device(config: TrainConfig, device: torch.device) -> TrainC
     return runtime_config
 
 
-def run_train(config: TrainConfig) -> dict[str, Any]:
+def run_train(config: TrainConfig) -> dict[str, float | int | str | None]:
     Path(config.output_dir).mkdir(parents=True, exist_ok=True)
 
     device = resolve_device(config.device)

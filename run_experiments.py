@@ -1,19 +1,51 @@
 from __future__ import annotations
 
-import json
+import gc
 from dataclasses import asdict, replace
 from pathlib import Path
-import gc
 
 import torch
 
-from experiment_configs import EvalConfig, TrainConfig
 from eval_lm_eval import run_lm_eval
+from experiment_configs import EvalConfig, TrainConfig
+from io_utils import ensure_dir, save_json
 from train_finetune import run_train
 
 
-def ensure_dir(path: str) -> None:
-    Path(path).mkdir(parents=True, exist_ok=True)
+def _experiment_paths(output_root: str, suite_name: str, run_name: str) -> tuple[str, str, str]:
+    run_dir = f"{output_root}/{suite_name}/{run_name}"
+    return run_dir, f"{run_dir}/train_metrics.json", f"{run_dir}/lm_eval.json"
+
+
+def _build_train_config(
+    base: TrainConfig, output_root: str, suite_name: str, run_name: str, **overrides
+) -> TrainConfig:
+    output_dir, report_path, _ = _experiment_paths(output_root, suite_name, run_name)
+    return replace(base, output_dir=output_dir, report_path=report_path, **overrides)
+
+
+def _build_eval_config(
+    *,
+    model_name_or_path: str,
+    mode: str,
+    output_root: str,
+    suite_name: str,
+    run_name: str,
+    adapter_path: str,
+    tasks: list[str],
+    sparse_k: int = 4096,
+    sparse_layers: list[int] | None = None,
+) -> EvalConfig:
+    _, _, output_path = _experiment_paths(output_root, suite_name, run_name)
+    return EvalConfig(
+        model_name_or_path=model_name_or_path,
+        mode=mode,
+        sparse_k=sparse_k,
+        sparse_layers=sparse_layers,
+        adapter_path=adapter_path,
+        tasks=tasks,
+        output_path=output_path,
+    )
 
 
 def cleanup_accelerator_memory() -> None:
@@ -33,7 +65,7 @@ def run_experiment(name: str, train_config: TrainConfig, eval_config: EvalConfig
         eval_results = run_lm_eval(eval_config)
     cleanup_accelerator_memory()
 
-    result = {
+    return {
         "name": name,
         "train_config": asdict(train_config),
         "train_metrics": train_metrics,
@@ -41,10 +73,11 @@ def run_experiment(name: str, train_config: TrainConfig, eval_config: EvalConfig
         "eval_results_path": eval_config.output_path if eval_config else None,
         "eval_task_count": len(eval_results.get("results", {})) if eval_results else 0,
     }
-    return result
 
 
-def build_debug_suite(output_root: str, model_name_or_path: str) -> list[tuple[str, TrainConfig, EvalConfig]]:
+def build_debug_suite(
+    output_root: str, model_name_or_path: str
+) -> list[tuple[str, TrainConfig, EvalConfig]]:
     base = TrainConfig(
         model_name_or_path=model_name_or_path,
         device="auto",
@@ -58,39 +91,34 @@ def build_debug_suite(output_root: str, model_name_or_path: str) -> list[tuple[s
         save_steps=10,
     )
 
-    baseline = replace(
-        base,
-        mode="baseline",
-        output_dir=f"{output_root}/debug/baseline",
-        report_path=f"{output_root}/debug/baseline/train_metrics.json",
-    )
-    sparse = replace(
-        base,
-        mode="sparse",
-        sparse_k=4096,
-        output_dir=f"{output_root}/debug/sparse",
-        report_path=f"{output_root}/debug/sparse/train_metrics.json",
-    )
+    baseline = _build_train_config(base, output_root, "debug", "baseline", mode="baseline")
+    sparse = _build_train_config(base, output_root, "debug", "sparse", mode="sparse", sparse_k=4096)
 
-    baseline_eval = EvalConfig(
+    baseline_eval = _build_eval_config(
         model_name_or_path=model_name_or_path,
         mode="baseline",
+        output_root=output_root,
+        suite_name="debug",
+        run_name="baseline",
         adapter_path=baseline.output_dir,
         tasks=["arc_easy"],
-        output_path=f"{output_root}/debug/baseline/lm_eval.json",
     )
-    sparse_eval = EvalConfig(
+    sparse_eval = _build_eval_config(
         model_name_or_path=model_name_or_path,
         mode="sparse",
-        sparse_k=4096,
+        output_root=output_root,
+        suite_name="debug",
+        run_name="sparse",
         adapter_path=sparse.output_dir,
         tasks=["arc_easy"],
-        output_path=f"{output_root}/debug/sparse/lm_eval.json",
+        sparse_k=4096,
     )
     return [("debug_baseline", baseline, baseline_eval), ("debug_sparse", sparse, sparse_eval)]
 
 
-def build_ablation_suite(output_root: str, model_name_or_path: str) -> list[tuple[str, TrainConfig, EvalConfig]]:
+def build_ablation_suite(
+    output_root: str, model_name_or_path: str
+) -> list[tuple[str, TrainConfig, EvalConfig]]:
     base = TrainConfig(
         model_name_or_path=model_name_or_path,
         device="auto",
@@ -105,71 +133,80 @@ def build_ablation_suite(output_root: str, model_name_or_path: str) -> list[tupl
     )
 
     runs: list[tuple[str, TrainConfig, EvalConfig]] = []
-    baseline = replace(
-        base,
-        mode="baseline",
-        output_dir=f"{output_root}/ablation/baseline_pair",
-        report_path=f"{output_root}/ablation/baseline_pair/train_metrics.json",
-    )
+    baseline = _build_train_config(base, output_root, "ablation", "baseline_pair", mode="baseline")
     runs.append(
         (
             "baseline_pair",
             baseline,
-            EvalConfig(
+            _build_eval_config(
                 model_name_or_path=model_name_or_path,
                 mode="baseline",
+                output_root=output_root,
+                suite_name="ablation",
+                run_name="baseline_pair",
                 adapter_path=baseline.output_dir,
                 tasks=["arc_easy", "hellaswag"],
-                output_path=f"{output_root}/ablation/baseline_pair/lm_eval.json",
             ),
         )
     )
 
     for k in (2048, 4096, 6144):
-        train_cfg = replace(
+        run_name = f"sparse_k_{k}"
+        train_cfg = _build_train_config(
             base,
+            output_root,
+            "ablation",
+            run_name,
             mode="sparse",
             sparse_k=k,
-            output_dir=f"{output_root}/ablation/sparse_k_{k}",
-            report_path=f"{output_root}/ablation/sparse_k_{k}/train_metrics.json",
         )
-        eval_cfg = EvalConfig(
+        eval_cfg = _build_eval_config(
             model_name_or_path=model_name_or_path,
             mode="sparse",
             sparse_k=k,
+            output_root=output_root,
+            suite_name="ablation",
+            run_name=run_name,
             adapter_path=train_cfg.output_dir,
             tasks=["arc_easy", "hellaswag"],
-            output_path=f"{output_root}/ablation/sparse_k_{k}/lm_eval.json",
         )
-        runs.append((f"sparse_k_{k}", train_cfg, eval_cfg))
+        runs.append((run_name, train_cfg, eval_cfg))
 
-    layer_run = replace(
+    layer_run_name = "sparse_layers_8_11"
+    layer_run = _build_train_config(
         base,
+        output_root,
+        "ablation",
+        layer_run_name,
         mode="sparse",
         sparse_k=4096,
         sparse_layers=[8, 9, 10, 11],
-        output_dir=f"{output_root}/ablation/sparse_layers_8_11",
-        report_path=f"{output_root}/ablation/sparse_layers_8_11/train_metrics.json",
     )
     runs.append(
         (
-            "sparse_layers_8_11",
+            layer_run_name,
             layer_run,
-            EvalConfig(
+            _build_eval_config(
                 model_name_or_path=model_name_or_path,
                 mode="sparse",
                 sparse_k=4096,
                 sparse_layers=[8, 9, 10, 11],
+                output_root=output_root,
+                suite_name="ablation",
+                run_name=layer_run_name,
                 adapter_path=layer_run.output_dir,
                 tasks=["arc_easy", "hellaswag"],
-                output_path=f"{output_root}/ablation/sparse_layers_8_11/lm_eval.json",
             ),
         )
     )
     return runs
 
 
-def run_suite(suite_name: str, model_name_or_path: str = "meta-llama/Llama-3.2-3B", output_root: str = "outputs/experiments") -> dict:
+def run_suite(
+    suite_name: str,
+    model_name_or_path: str = "meta-llama/Llama-3.2-3B",
+    output_root: str = "outputs/experiments",
+) -> dict:
     ensure_dir(output_root)
     if suite_name == "debug":
         plan = build_debug_suite(output_root=output_root, model_name_or_path=model_name_or_path)
@@ -184,8 +221,6 @@ def run_suite(suite_name: str, model_name_or_path: str = "meta-llama/Llama-3.2-3
 
     summary = {"suite": suite_name, "model_name_or_path": model_name_or_path, "runs": runs}
     summary_path = Path(output_root) / f"{suite_name}_summary.json"
-    with summary_path.open("w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2, ensure_ascii=False)
+    save_json(summary_path, summary)
     print(f"[DONE] Summary saved to {summary_path}")
     return summary
-
