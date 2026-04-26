@@ -11,7 +11,7 @@ from sparsificaiton import SparseMLP, replace_nested_module
 
 HF_TOKEN = os.environ.get('HF_TOKEN')
 
-if __name__ == "__main__":
+def run_model_demo() -> None:
     login(token=HF_TOKEN)
     print(HF_TOKEN)
     model_path = "meta-llama/Llama-3.2-3B"

@@ -14,8 +14,9 @@ class SparseMLP(nn.Module):
         self.down_proj = base_layer.down_proj
         self.act_fn = base_layer.act_fn
         self.k_max = self.up_proj.in_features
-        self.k_min = self.up_proj.in_features//2
-        #TODO: check boundary and throw exception if needed
+        self.k_min = 1
+        if not (self.k_min <= k <= self.k_max):
+            raise ValueError(f"k must be in [{self.k_min}, {self.k_max}], got {k}")
         self.k = k
 
     def forward(self, x):

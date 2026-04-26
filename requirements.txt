@@ -1,0 +1,7 @@
+torch
+transformers
+datasets
+accelerate
+peft
+huggingface_hub
+lm-eval
