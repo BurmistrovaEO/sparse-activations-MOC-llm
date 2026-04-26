@@ -10,11 +10,6 @@ from lm_eval.models.huggingface import HFLM
 from tap import Tap
 
 from sparsificaiton import SparseMLP, replace_nested_module
-from fine_tune_model_simple import compute_token_accuracy, train_model
-from data import prepare_data, format_instruction
-from peft import get_peft_model, LoraConfig
-from datasets import load_dataset
-from alpaca_eval import evaluate
 from typing import List
 
 def dummy_launch(model, tokenizer):
@@ -51,6 +46,7 @@ class ARGUMENT_PARSER(Tap):
     num_train_epochs: int = 2
     weight_decay: float = 0.01
 
+    hf_tasks: List[str] = ["hellaswag", "arc_challenge", "arc_easy", "boolq", "winogrande", "wikitext"]
 
 
 def main(parsed_arguments):
@@ -112,14 +108,14 @@ def main(parsed_arguments):
     # Run evaluation on a single task
     results = evaluator.simple_evaluate(
         model=model,
-        tasks=["arc_easy"],
+        tasks=parsed_arguments.hf_tasks,
         num_fewshot=0,
         limit=100,
         batch_size=8
     )
 
     # Print accuracy
-    print(f"Accuracy: {results['results']['arc_easy']}")
+    print(f"Accuracy: {results['results']}")
 
 
 if __name__ == "__main__":
