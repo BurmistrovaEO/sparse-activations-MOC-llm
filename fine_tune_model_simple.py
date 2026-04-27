@@ -60,7 +60,7 @@ def train_model(
         return tokenizer(
             examples["text"],
             truncation=True,
-            max_length=512,
+            max_length=64,
             padding=True,
             return_tensors="pt",
         )
