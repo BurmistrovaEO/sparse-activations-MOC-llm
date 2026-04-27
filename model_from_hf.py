@@ -12,7 +12,7 @@ from tap import Tap
 
 from sparsificaiton import SparseMLP, NMsparseMLP, replace_nested_module
 from typing import List
-
+from optimized_forward_mac import SparseMLP as SParseFWMLP
 
 def dummy_launch(model, tokenizer):
 
@@ -66,25 +66,50 @@ def main(parsed_arguments):
 
     to_replace_names_modules = {}
 
-    with torch.no_grad():
-        counter = 0
-        for name, module in model.named_modules():
-            if isinstance(module, LlamaMLP):
-                if 2 < counter < 25:
-                    counter+=1
-                    continue
+    # with torch.no_grad():
+    #     counter = 0
+    #     for name, module in model.named_modules():
+    #         if isinstance(module, LlamaMLP):
+    #             if counter < 11:
+    #                 counter += 1
+    #                 continue
+    #             if counter > 16:
+    #                 break
 
-                counter+=1
-                print(name)
-                to_replace_names_modules[name] = module
+    #             counter+=1
+    #             print(name)
+    #             to_replace_names_modules[name] = module
                 
 
-        for name, module in to_replace_names_modules.items():
-            #sparseBlock = SparseMLP(module, k=1024)
-            sparseBlock = NMsparseMLP(module, 8, 16)
-            replace_nested_module(model, name, sparseBlock)
+    #     for name, module in to_replace_names_modules.items():
+    #         #sparseBlock = SparseMLP(module, k=1024)
+    #         #sparseBlock = NMsparseMLP(module, 2, 8)
+    #         sparseBlock = SParseFWMLP(module, k = 4096)
+    #         replace_nested_module(model, name, sparseBlock)
+
+    counter = 0
+    for name, module in model.named_modules():
+        if isinstance(module, LlamaMLP):
+            if counter < 11:
+                counter += 1
+                continue
+            if counter > 16:
+                break
+
+            counter+=1
+            print(name)
+            to_replace_names_modules[name] = module
+            
+
+    for name, module in to_replace_names_modules.items():
+        #sparseBlock = SparseMLP(module, k=1024)
+        #sparseBlock = EfficientSparseMLP(module, 2, 8)
+        sparseBlock = SParseFWMLP(module, k = 4096)
+        replace_nested_module(model, name, sparseBlock)
+
 
     if parsed_arguments.lora_finetune:
+        model = torch.compile(model, mode="reduce-overhead")
         train_model(
                 model = model,
                 tokenizer = tokenizer,

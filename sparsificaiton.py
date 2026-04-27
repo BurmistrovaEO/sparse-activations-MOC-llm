@@ -34,7 +34,7 @@ class SparseMLP(nn.Module):
         up_out = up_out * mask
         self.U_und = up_out.clone()
 
-        act_out = self.act_fn(self.G_und)
+        act_out = self.act_fn(gate_out)
         act_out = act_out * mask
         self.S_und = act_out.clone()
 
