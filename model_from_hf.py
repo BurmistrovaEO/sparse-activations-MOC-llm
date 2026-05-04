@@ -2,70 +2,85 @@ import os
 import torch
 import transformers
 from path import Path
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, TrainingArguments, Trainer
 from transformers.models.llama.modeling_llama import LlamaMLP
 from huggingface_hub import login
 from lm_eval import evaluator, tasks
 from lm_eval.models.huggingface import HFLM
+from fine_tune_model_simple import train_model
 from tap import Tap
 
-from sparsificaiton import SparseMLP, replace_nested_module
+from sparsification import SparseMLP, NMsparseMLP, replace_nested_module
+from typing import List
+from optimized_forward_mac import SparseMLP as SParseFWMLP
+from ablations import set_up_sparsification
+import json
 
-#HF_TOKEN = os.environ.get('HF_TOKEN')
+from argument_parser import ARGUMENT_PARSER, parse_and_join_config
 
-class ARGUMENT_PARSER(Tap):
-    config_path: Path = None
-    HF_TOKEN: str = None
-    model_path: str = "/Users/kateburmr/.cache/huggingface/hub/models--meta-llama--Llama-3.2-3B/snapshots/13afe5124825b4f3751f836b40dafda64c1ed062"
+def dummy_launch(model, tokenizer):
 
-#TODO rewrite as main
+    input_text = "What is Python?"
+
+    tok_text = tokenizer(input_text, return_tensors="pt")
+    decoded = tokenizer.decode(tok_text["input_ids"][0], skip_special_tokens=True)
+    outputs = model.generate(**tok_text, max_new_tokens=100)
+    decoded = tokenizer.decode(outputs[0])
+
+    print(decoded)
+
+
 def main(parsed_arguments):
-    #TODO check if HF_TOken is not none
+
+    if parsed_arguments.config_path is not None:
+        parsed_arguments = parse_and_join_config(parsed_arguments)
+
+    assert (parsed_arguments.k_param is not None) or (parsed_arguments.n_param is not None and parsed_arguments.m_param is not None)
+
     if parsed_arguments.HF_TOKEN:
         login(token=parsed_arguments.HF_TOKEN)
         print(parsed_arguments.HF_TOKEN)
         model_path = "meta-llama/Llama-3.2-3B"
     else:
         model_path = parsed_arguments.model_path
+        
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForCausalLM.from_pretrained(model_path)
+    model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
 
-    to_replace_names_modules = {}
+    if parsed_arguments.sparsify:
 
-    with torch.no_grad():
-        counter = 0
-        for name, module in model.named_modules():
-            if isinstance(module, LlamaMLP):
-                if counter < 10:
-                    counter+=1
-                    continue
-                print(name)
-                to_replace_names_modules[name] = module
-                break
+        set_up_sparsification(
+                    model,
+                    parsed_arguments.ablation_kind,
+                    parsed_arguments.importance_percentage,
+                    parsed_arguments.sparse_implementation,
+                    parsed_arguments.device,
+                    parsed_arguments.k_param,
+                    parsed_arguments.n_param,
+                    parsed_arguments.m_param
+                )
 
-        for name, module in to_replace_names_modules.items():
-            sparseBlock = SparseMLP(module)
-            replace_nested_module(model, name, sparseBlock)
-            
 
-    # print(model)
+    if parsed_arguments.lora_finetune:
+        model = torch.compile(model, mode="reduce-overhead")
+        train_model(
+                model = model,
+                tokenizer = tokenizer,
+                lora_rank = parsed_arguments.lora_rank,
+                lora_alpha = parsed_arguments.lora_alpha,
+                lora_dropout = parsed_arguments.lora_dropout,
+                target_modules = parsed_arguments.target_modules,
+                dataset_path = parsed_arguments.dataset,
+                train_output_dir = parsed_arguments.train_output_dir,
+                learning_rate = parsed_arguments.learning_rate,
+                per_device_train_batch_size = parsed_arguments.per_device_train_batch_size,
+                per_device_eval_batch_size = parsed_arguments.per_device_eval_batch_size,
+                num_train_epochs = parsed_arguments.num_train_epochs,
+                weight_decay = parsed_arguments.weight_decay
+            )
 
-    #input_text = "How to learn japanese in three easy steps before the week is over? (It's friday)"
-    input_text = "What is Python?"
-
-    tok_text = tokenizer(input_text, return_tensors="pt")
-
-    decoded = tokenizer.decode(tok_text["input_ids"][0], skip_special_tokens=True)
-
-    #output = model(**tok_text)
-    outputs = model.generate(**tok_text, max_new_tokens=100)
-
-    decoded = tokenizer.decode(outputs[0])
-
-    print(decoded)
 
     # Evaluate model
-
     model = HFLM(
         pretrained=model,
         device="mps:0"
@@ -74,14 +89,23 @@ def main(parsed_arguments):
     # Run evaluation on a single task
     results = evaluator.simple_evaluate(
         model=model,
-        tasks=["arc_easy"],
+        tasks=parsed_arguments.hf_tasks,
         num_fewshot=0,
         limit=100,
         batch_size=8
     )
 
+    modules_importances = []
+    
     # Print accuracy
-    print(f"Accuracy: {results['results']['arc_easy']}")
+    print(f"Accuracy: {results['results']}")
+    # for name, module in model.model.named_modules():
+    #     if isinstance(module, LlamaMLP):
+    #         modules_importances.append(torch.mean(torch.tensor(module.importances)).item())
+
+    # list1, list2 = zip(*sorted(zip(modules_importances, [i for i in range(28)])))
+    # print(list(reversed(list1)))
+    # print(list(reversed(list2)))
 
 
 if __name__ == "__main__":
