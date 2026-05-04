@@ -91,7 +91,7 @@ class SparseMLP(nn.Module):
     Sparse MLP that can replace a standard MLP module
     Compatible with standard nn.Linear layers
     """
-    def __init__(self, base_layer, k=4096):
+    def __init__(self, base_layer, k=4096, n=None, m=None):
         super().__init__()
         
         self.config = base_layer.config
@@ -102,7 +102,8 @@ class SparseMLP(nn.Module):
         self.up_proj = base_layer.up_proj
         self.down_proj = base_layer.down_proj
         self.act_fn = base_layer.act_fn
-        
+        self.n = None
+        self.m = None
         self.k = k
         
         # Sparse MLP layers
@@ -110,7 +111,7 @@ class SparseMLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return SparseGateFunction.apply(
             x, self.gate_proj, self.up_proj, self.down_proj, 
-            self.act_fn, self.k
+            self.act_fn, self.k, self.n, self.m
         )
 
 

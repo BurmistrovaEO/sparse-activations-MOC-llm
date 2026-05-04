@@ -10,9 +10,13 @@ from lm_eval.models.huggingface import HFLM
 from fine_tune_model_simple import train_model
 from tap import Tap
 
-from sparsificaiton import SparseMLP, NMsparseMLP, replace_nested_module
+from sparsification import SparseMLP, NMsparseMLP, replace_nested_module
 from typing import List
 from optimized_forward_mac import SparseMLP as SParseFWMLP
+from ablations import set_up_sparsification
+import json
+
+from argument_parser import ARGUMENT_PARSER, parse_and_join_config
 
 def dummy_launch(model, tokenizer):
 
@@ -26,32 +30,12 @@ def dummy_launch(model, tokenizer):
     print(decoded)
 
 
-class ARGUMENT_PARSER(Tap):
-    config_path: Path = None
-    HF_TOKEN: str = None
-    model_path: str = "/Users/kateburmr/.cache/huggingface/hub/models--meta-llama--Llama-3.2-3B/snapshots/13afe5124825b4f3751f836b40dafda64c1ed062"
-    lora_finetune: bool = False
-    dataset: str = "tatsu-lab/alpaca"
-
-
-
-    lora_rank: int = 2 # 8
-    lora_alpha: int = 4 # 16
-    lora_dropout: float = 0.05
-    target_modules: List[str] = ['gate_proj', 'up_proj', 'down_proj', 'k_proj', 'v_proj', 'o_proj', 'q_proj']
-
-    train_output_dir: str = "results/res0/mt0-large-lora"
-    learning_rate: float = 1e-3
-    per_device_train_batch_size: int = 2 # 32
-    per_device_eval_batch_size: int = 2 # 32
-    num_train_epochs: int = 2
-    weight_decay: float = 0.01
-
-    hf_tasks: List[str] = ["hellaswag", "arc_challenge", "arc_easy", "boolq", "winogrande"] # wikitext separately
-    #hf_tasks: List[str] = ["wikitext"] # wikitext separately
-
-
 def main(parsed_arguments):
+
+    if parsed_arguments.config_path is not None:
+        parsed_arguments = parse_and_join_config(parsed_arguments)
+
+    assert (parsed_arguments.k_param is not None) or (parsed_arguments.n_param is not None and parsed_arguments.m_param is not None)
 
     if parsed_arguments.HF_TOKEN:
         login(token=parsed_arguments.HF_TOKEN)
@@ -63,49 +47,18 @@ def main(parsed_arguments):
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
 
+    if parsed_arguments.sparsify:
 
-    to_replace_names_modules = {}
-
-    # with torch.no_grad():
-    #     counter = 0
-    #     for name, module in model.named_modules():
-    #         if isinstance(module, LlamaMLP):
-    #             if counter < 11:
-    #                 counter += 1
-    #                 continue
-    #             if counter > 16:
-    #                 break
-
-    #             counter+=1
-    #             print(name)
-    #             to_replace_names_modules[name] = module
-                
-
-    #     for name, module in to_replace_names_modules.items():
-    #         #sparseBlock = SparseMLP(module, k=1024)
-    #         #sparseBlock = NMsparseMLP(module, 2, 8)
-    #         sparseBlock = SParseFWMLP(module, k = 4096)
-    #         replace_nested_module(model, name, sparseBlock)
-
-    counter = 0
-    for name, module in model.named_modules():
-        if isinstance(module, LlamaMLP):
-            if counter < 11:
-                counter += 1
-                continue
-            if counter > 16:
-                break
-
-            counter+=1
-            print(name)
-            to_replace_names_modules[name] = module
-            
-
-    for name, module in to_replace_names_modules.items():
-        #sparseBlock = SparseMLP(module, k=1024)
-        #sparseBlock = EfficientSparseMLP(module, 2, 8)
-        sparseBlock = SParseFWMLP(module, k = 4096)
-        replace_nested_module(model, name, sparseBlock)
+        set_up_sparsification(
+                    model,
+                    parsed_arguments.ablation_kind,
+                    parsed_arguments.importance_percentage,
+                    parsed_arguments.sparse_implementation,
+                    parsed_arguments.device,
+                    parsed_arguments.k_param,
+                    parsed_arguments.n_param,
+                    parsed_arguments.m_param
+                )
 
 
     if parsed_arguments.lora_finetune:
@@ -128,7 +81,6 @@ def main(parsed_arguments):
 
 
     # Evaluate model
-
     model = HFLM(
         pretrained=model,
         device="mps:0"
@@ -143,8 +95,17 @@ def main(parsed_arguments):
         batch_size=8
     )
 
+    modules_importances = []
+    
     # Print accuracy
     print(f"Accuracy: {results['results']}")
+    # for name, module in model.model.named_modules():
+    #     if isinstance(module, LlamaMLP):
+    #         modules_importances.append(torch.mean(torch.tensor(module.importances)).item())
+
+    # list1, list2 = zip(*sorted(zip(modules_importances, [i for i in range(28)])))
+    # print(list(reversed(list1)))
+    # print(list(reversed(list2)))
 
 
 if __name__ == "__main__":

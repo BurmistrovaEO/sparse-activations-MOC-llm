@@ -13,7 +13,7 @@ class TritonSparseMLP(nn.Module):
     """
     
     def __init__(self, original_module: nn.Module, sparsity_ratio: float = 0.1, 
-                 k: Optional[int] = None, use_triton: bool = True):
+                 k: Optional[int] = None, use_triton: bool = True, n = None, m = None):
         """
         Create a sparse MLP from an existing MLP module
         
@@ -34,6 +34,8 @@ class TritonSparseMLP(nn.Module):
         if k is None:
             k = int(self.hidden_dim * sparsity_ratio)
         self.k = max(1, min(k, self.hidden_dim))
+        self.n = None
+        self.m = None
         self.sparsity_ratio = sparsity_ratio
         
         # Create sparse projections

@@ -4,7 +4,7 @@ from transformers.activations import ACT2FN
 import torch.nn as nn
 
 class SparseMLP(nn.Module):
-    def __init__(self, base_layer, k=4096):
+    def __init__(self, base_layer, k=4096, n=None, m=None):
         super().__init__()
         self.config = base_layer.config
         self.hidden_size = base_layer.config.hidden_size
@@ -16,6 +16,8 @@ class SparseMLP(nn.Module):
         self.k_max = self.up_proj.in_features
         self.k_min = self.up_proj.in_features//2
         #TODO: check boundary and throw exception if needed
+        self.n = None
+        self.m = None
         self.k = k
         self.G_und = None
         self.U_und = None
@@ -42,7 +44,7 @@ class SparseMLP(nn.Module):
         return down_proj
     
 class NMsparseMLP(nn.Module):
-    def __init__(self, base_layer, m = 2, n = 8):
+    def __init__(self, base_layer, k=None, m = 2, n = 8):
         super().__init__()
         self.config = base_layer.config
         self.hidden_size = base_layer.config.hidden_size
@@ -51,6 +53,7 @@ class NMsparseMLP(nn.Module):
         self.up_proj = base_layer.up_proj
         self.down_proj = base_layer.down_proj
         self.act_fn = base_layer.act_fn
+        assert k is None
         self.m = m
         self.n = n
 
