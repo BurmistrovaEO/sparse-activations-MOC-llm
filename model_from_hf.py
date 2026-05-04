@@ -1,8 +1,6 @@
-import os
 import torch
-import transformers
 from path import Path
-from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, TrainingArguments, Trainer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.models.llama.modeling_llama import LlamaMLP
 from huggingface_hub import login
 from lm_eval import evaluator, tasks
@@ -10,11 +8,7 @@ from lm_eval.models.huggingface import HFLM
 from fine_tune_model_simple import train_model
 from tap import Tap
 
-from sparsification import SparseMLP, NMsparseMLP, replace_nested_module
-from typing import List
-from optimized_forward_mac import SparseMLP as SParseFWMLP
 from ablations import set_up_sparsification
-import json
 
 from argument_parser import ARGUMENT_PARSER, parse_and_join_config
 

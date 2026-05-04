@@ -1,7 +1,7 @@
-from sparsification import SparseMLP, NMsparseMLP, replace_nested_module
-from optimized_forward_mac import SparseMLP as SParseFWMLP
+from sparsity.sparsification import SparseMLP, NMsparseMLP, replace_nested_module
+from sparsity.optimized_forward_mac import SparseMLP as SParseFWMLP
 from transformers.models.llama.modeling_llama import LlamaMLP
-from triton_sparsity import TritonSparseMLP
+from sparsity.triton_sparsity import TritonSparseMLP
 import math
 
 IMPORTANCE_RANKING = [27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 15, 17, 16, 14, 13, 12, 11, 10, 9, 7, 8, 6, 5, 4, 3, 1, 2, 0]
