@@ -6,3 +6,5 @@ __pycache__/*
 *.out
 *.gz
 *.tex
+.DS_Store
+results/*
