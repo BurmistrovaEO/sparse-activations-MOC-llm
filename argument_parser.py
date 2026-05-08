@@ -10,13 +10,13 @@ class ARGUMENT_PARSER(Tap):
     model_path: str = "/Users/kateburmr/.cache/huggingface/hub/models--meta-llama--Llama-3.2-3B/snapshots/13afe5124825b4f3751f836b40dafda64c1ed062"
     lora_finetune: bool = False
     dataset: str = "tatsu-lab/alpaca"
-    sparsify: bool = True
+    sparsify: bool = False
     ablation_kind: str = "begin" #["begin", "end", "begend", "middle", "importance"] TODO: reimplement as enum
     importance_percentage: int = None
     sparse_implementation: str = "vanilla_k" #TODO: reimplement as enum
-    k_param: int = None
-    n_param: int = None
-    m_param: int = None
+    k_param: int = 4096
+    n_param: int = 2
+    m_param: int = 8
 
 
     lora_rank: int = 2 # 8

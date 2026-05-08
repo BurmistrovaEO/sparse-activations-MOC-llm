@@ -26,10 +26,10 @@ def dummy_launch(model, tokenizer):
 
 def main(parsed_arguments):
 
+    print(parsed_arguments) # replace with custom logger
+
     if parsed_arguments.config_path is not None:
         parsed_arguments = parse_and_join_config(parsed_arguments)
-
-    assert (parsed_arguments.k_param is not None) or (parsed_arguments.n_param is not None and parsed_arguments.m_param is not None)
 
     if parsed_arguments.HF_TOKEN:
         login(token=parsed_arguments.HF_TOKEN)
