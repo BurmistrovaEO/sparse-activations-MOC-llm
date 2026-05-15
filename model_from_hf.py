@@ -9,8 +9,10 @@ from fine_tune_model_simple import train_model
 from tap import Tap
 
 from ablations import set_up_sparsification
+from rich.console import Console
 
 from argument_parser import ARGUMENT_PARSER, parse_and_join_config
+from custom_formatter import parsed_arguments_table
 
 def dummy_launch(model, tokenizer):
 
@@ -26,7 +28,9 @@ def dummy_launch(model, tokenizer):
 
 def main(parsed_arguments):
 
-    print(parsed_arguments) # replace with custom logger
+    console = Console(width=150)
+    console.print(parsed_arguments_table(parsed_arguments))
+    
 
     if parsed_arguments.config_path is not None:
         parsed_arguments = parse_and_join_config(parsed_arguments)
