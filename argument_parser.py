@@ -36,7 +36,7 @@ class ARGUMENT_PARSER(Tap):
                     "train_output_dir", "learning_rate", "per_device_train_batch_size", \
                     "per_device_eval_batch_size", "num_train_epochs", "weight_decay"]
 
-    hf_tasks: List[str] = ["hellaswag", "arc_challenge", "arc_easy", "boolq", "winogrande"] # wikitext
+    hf_tasks: List[str] = ["hellaswag", "arc_challenge", "arc_easy", "boolq", "winogrande"]
 
 
 def parse_and_join_config(parsed_arguments):

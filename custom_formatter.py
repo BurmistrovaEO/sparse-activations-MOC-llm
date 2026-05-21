@@ -7,12 +7,7 @@ from rich.text import Text
 from rich.box import SQUARE_DOUBLE_HEAD
 from rich.color import ANSI_COLOR_NAMES
 
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[RichHandler(console = Console(width=150))]
-    )
-log= logging.getLogger(__name__)
-
+metric_types = ["acc,none", "acc_norm,none", "perplexity"]
 
 def parsed_arguments_table(parsed_arguments):
 
@@ -45,3 +40,31 @@ def parsed_arguments_table(parsed_arguments):
     table.add_row("Sparse", ON_TEXT_SPARSE if parsed_arguments.sparsify else OFF_text)
     return table
 
+def results_table(evaluation_results):
+    table = Table(title="Evaluation results", box=SQUARE_DOUBLE_HEAD, show_lines=True)
+
+    table.add_column("Metric", justify="right", vertical="middle", style="deep_sky_blue3")
+
+    row_dict = {metric_type:[] for metric_type in metric_types}
+
+
+    for idx, (name, values) in enumerate(evaluation_results.items()):
+        table.add_column(name, justify="center")
+        for metric_type in metric_types:
+            row_dict[metric_type].append(values.get(metric_type, '-'))
+             
+    table.add_column("Avg", justify="left")
+
+    avgs = {}
+
+    for key, val in row_dict.items():
+        l = [value for value in val if isinstance(value, float)]
+        length = len(l)
+        avgs[key] = round(sum(l)/length, 3) if length > 0 else '-'
+
+    for key, val in avgs.items():
+        row_dict[key].append(val)
+
+    for row_name, row_values in row_dict.items():
+        table.add_row(row_name, *[str(rv) for rv in row_values])
+    return table

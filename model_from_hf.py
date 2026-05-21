@@ -12,7 +12,7 @@ from ablations import set_up_sparsification
 from rich.console import Console
 
 from argument_parser import ARGUMENT_PARSER, parse_and_join_config
-from custom_formatter import parsed_arguments_table
+from custom_formatter import parsed_arguments_table, results_table
 
 def dummy_launch(model, tokenizer):
 
@@ -94,9 +94,10 @@ def main(parsed_arguments):
     )
 
     modules_importances = []
-    
-    # Print accuracy
-    print(f"Accuracy: {results['results']}")
+
+    console = Console(width=150)
+    console.print(results_table(results['results']))
+
     # for name, module in model.model.named_modules():
     #     if isinstance(module, LlamaMLP):
     #         modules_importances.append(torch.mean(torch.tensor(module.importances)).item())
