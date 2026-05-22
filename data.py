@@ -1,5 +1,3 @@
-from datasets import load_dataset
-
 def format_dataset(examples):
     if isinstance(examples["prompt"], list):
         output_texts = []
@@ -9,30 +7,30 @@ def format_dataset(examples):
                 {"role": "assistant", "content": examples["completion"][i]},
             ]
             output_texts.append(converted_sample)
-        return {'messages': output_texts}
+        return {"messages": output_texts}
     else:
         converted_sample = [
             {"role": "user", "content": examples["prompt"]},
             {"role": "assistant", "content": examples["completion"]},
         ]
-        return {'messages': converted_sample}
+        return {"messages": converted_sample}
+
 
 def prepare_data(dataset):
 
     dataset = dataset.rename_column("sentence", "prompt")
     dataset = dataset.rename_column("translation_extra", "completion")
     dataset = dataset.map(format_dataset)
-    dataset = dataset.remove_columns(['prompt', 'completion', 'translation'])
+    dataset = dataset.remove_columns(["prompt", "completion", "translation"])
 
     print(dataset[0])
     return dataset
 
+
 def format_instruction(example):
-        """Format Alpaca data for Llama"""
-        text = f"### Instruction:\n{example['instruction']}\n"
-        if example['input']:
-            text += f"### Input:\n{example['input']}\n"
-        text += f"### Response:\n{example['output']}"
-        return {"text": text}
-
-
+    """Format Alpaca data for Llama"""
+    text = f"### Instruction:\n{example['instruction']}\n"
+    if example["input"]:
+        text += f"### Input:\n{example['input']}\n"
+    text += f"### Response:\n{example['output']}"
+    return {"text": text}
