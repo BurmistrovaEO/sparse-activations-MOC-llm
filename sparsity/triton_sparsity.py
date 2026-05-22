@@ -13,9 +13,15 @@ class TritonSparseMLP(nn.Module):
     Copies architecture, dimensions, and weights from the original
     """
 
-    def __init__(self, original_module: nn.Module, sparsity_ratio: float = 0.1,
-                 k: Optional[int] = None, use_triton: bool = True,
-                 n: int = None, m: int = None):
+    def __init__(
+        self,
+        original_module: nn.Module,
+        sparsity_ratio: float = 0.1,
+        k: Optional[int] = None,
+        use_triton: bool = True,
+        n: int = None,
+        m: int = None,
+    ):
         """
         Create a sparse MLP from an existing MLP module
 
@@ -43,23 +49,23 @@ class TritonSparseMLP(nn.Module):
         self.sparsity_ratio = sparsity_ratio
 
         # Create sparse projections
-        self.gate_proj = nn.Linear(self.in_features,
-                                   self.hidden_dim,
-                                   bias=self.has_gate_bias)
-        self.up_proj = nn.Linear(self.in_features,
-                                 self.hidden_dim,
-                                 bias=self.has_up_bias)
-        self.down_proj = nn.Linear(self.hidden_dim,
-                                   self.out_features,
-                                   bias=self.has_down_bias)
+        self.gate_proj = nn.Linear(
+            self.in_features, self.hidden_dim, bias=self.has_gate_bias
+        )
+        self.up_proj = nn.Linear(
+            self.in_features, self.hidden_dim, bias=self.has_up_bias
+        )
+        self.down_proj = nn.Linear(
+            self.hidden_dim, self.out_features, bias=self.has_down_bias
+        )
         self.act_fn = self.activation_fn
 
         # Copy weights from original module
         self._copy_weights(original_module)
 
         # Register buffers for sparse indices and masks (for debugging)
-        self.register_buffer('last_indices', None)
-        self.register_buffer('last_mask', None)
+        self.register_buffer("last_indices", None)
+        self.register_buffer("last_mask", None)
 
     def _detect_mlp_structure(self, module: nn.Module):
         """Detect the structure of the original MLP module"""
@@ -75,9 +81,9 @@ class TritonSparseMLP(nn.Module):
 
         # Pattern 1: Standard LLM FFN with gate_proj, up_proj, down_proj
         if (
-            hasattr(module, 'gate_proj')
-            and hasattr(module, 'up_proj')
-            and hasattr(module, 'down_proj')
+            hasattr(module, "gate_proj")
+            and hasattr(module, "up_proj")
+            and hasattr(module, "down_proj")
         ):
             self.gate_proj_orig = module.gate_proj
             self.up_proj_orig = module.up_proj
@@ -99,11 +105,9 @@ class TritonSparseMLP(nn.Module):
 
                 # Store original layers for weight copying
                 self.gate_proj_orig = linear_layers[0]
-                self.up_proj_orig = (
-                                        linear_layers[1]
-                                        if len(linear_layers) > 1
-                                        else None
-                                    )
+                self.up_proj_orig = (linear_layers[1]
+                                     if len(linear_layers) > 1
+                                     else None)
                 self.down_proj_orig = linear_layers[-1]
 
                 # Find activation function
@@ -113,7 +117,7 @@ class TritonSparseMLP(nn.Module):
                         break
 
         # Pattern 3: Custom MLP with fc1, fc2 pattern
-        elif hasattr(module, 'fc1') and hasattr(module, 'fc2'):
+        elif hasattr(module, "fc1") and hasattr(module, "fc2"):
             self.gate_proj_orig = module.fc1
             self.down_proj_orig = module.fc2
             self.in_features = module.fc1.in_features
@@ -121,15 +125,13 @@ class TritonSparseMLP(nn.Module):
             self.out_features = module.fc2.out_features
 
             # Check for up_proj (some have gate and up)
-            if hasattr(module, 'fc3'):
+            if hasattr(module, "fc3"):
                 self.up_proj_orig = module.fc3
 
         # Pattern 4: LLaMA/Mistral style MLP
-        elif (
-            hasattr(module, 'w1')
-            and hasattr(module, 'w2')
-            and hasattr(module, 'w3')
-        ):
+        elif (hasattr(module, "w1")
+              and hasattr(module, "w2")
+              and hasattr(module, "w3")):
             self.gate_proj_orig = module.w1
             self.up_proj_orig = module.w3
             self.down_proj_orig = module.w2
@@ -138,14 +140,16 @@ class TritonSparseMLP(nn.Module):
             self.out_features = module.w2.out_features
 
         else:
-            raise ValueError(f"Cannot detect MLP structure "
-                             f"in module of type {type(module)}")
+            raise ValueError(
+                f"Cannot detect MLP structure "
+                f"in module of type {type(module)}"
+            )
 
         # Ensure we have all required projections
-        if not hasattr(self, 'gate_proj_orig'):
+        if not hasattr(self, "gate_proj_orig"):
             raise ValueError("Could not identify gate "
                              "projection in original module")
-        if not hasattr(self, 'down_proj_orig'):
+        if not hasattr(self, "down_proj_orig"):
             raise ValueError("Could not identify down "
                              "projection in original module")
 
@@ -153,7 +157,7 @@ class TritonSparseMLP(nn.Module):
         """Copy weights from original module to sparse module"""
         with torch.no_grad():
             # Copy gate projection weights
-            if hasattr(self, 'gate_proj_orig'):
+            if hasattr(self, "gate_proj_orig"):
                 self.gate_proj.weight.copy_(self.gate_proj_orig.weight)
                 if (
                     self.gate_proj.bias is not None
@@ -162,7 +166,7 @@ class TritonSparseMLP(nn.Module):
                     self.gate_proj.bias.copy_(self.gate_proj_orig.bias)
 
             # Copy up projection weights
-            if hasattr(self, 'up_proj_orig') and self.up_proj_orig is not None:
+            if hasattr(self, "up_proj_orig") and self.up_proj_orig is not None:
                 self.up_proj.weight.copy_(self.up_proj_orig.weight)
                 if (
                     self.up_proj.bias is not None
@@ -229,10 +233,13 @@ class SparseMLPWrapper(nn.Module):
     top-k sparsity to its intermediate activations
     """
 
-    def __init__(self, original_module: nn.Module,
-                 sparsity_ratio: float = 0.1,
-                 k: Optional[int] = None,
-                 sparse_gradients: bool = False):
+    def __init__(
+        self,
+        original_module: nn.Module,
+        sparsity_ratio: float = 0.1,
+        k: Optional[int] = None,
+        sparse_gradients: bool = False,
+    ):
         """
         Wrap an existing MLP module to make it sparse
 
@@ -257,11 +264,11 @@ class SparseMLPWrapper(nn.Module):
     def _detect_hidden_dim(self) -> int:
         """Detect the hidden dimension of the MLP"""
         # Try common patterns
-        if hasattr(self.original_module, 'gate_proj'):
+        if hasattr(self.original_module, "gate_proj"):
             return self.original_module.gate_proj.out_features
-        elif hasattr(self.original_module, 'fc1'):
+        elif hasattr(self.original_module, "fc1"):
             return self.original_module.fc1.out_features
-        elif hasattr(self.original_module, 'w1'):
+        elif hasattr(self.original_module, "w1"):
             return self.original_module.w1.out_features
         elif isinstance(self.original_module, nn.Sequential):
             for m in self.original_module:
@@ -276,9 +283,8 @@ class SparseMLPWrapper(nn.Module):
         # This is more complex - requires modifying the forward pass
         # For now, we assume the module has a specific structure
 
-        if (
-            hasattr(self.original_module, 'gate_proj')
-            and hasattr(self.original_module, 'up_proj')
+        if hasattr(self.original_module, "gate_proj") and hasattr(
+            self.original_module, "up_proj"
         ):
             # Standard pattern: compute gate and up separately
             gate_out = self.original_module.gate_proj(x)
@@ -293,7 +299,7 @@ class SparseMLPWrapper(nn.Module):
             up_sparse = up_out * mask
 
             # Continue with activation
-            if hasattr(self.original_module, 'act_fn'):
+            if hasattr(self.original_module, "act_fn"):
                 act_out = self.original_module.act_fn(gate_sparse)
             else:
                 act_out = F.silu(gate_sparse)  # Default
@@ -308,12 +314,13 @@ class SparseMLPWrapper(nn.Module):
 
 # ============ MODEL REPLACEMENT UTILITIES ============
 
+
 def replace_mlp_modules(
     model: nn.Module,
     sparsity_ratio: float = 0.1,
     target_names: Optional[List[str]] = None,
     module_type: type = None,
-    use_triton: bool = True
+    use_triton: bool = True,
 ) -> nn.Module:
     """
     Replace all MLP modules in a model with sparse versions
@@ -337,37 +344,36 @@ def replace_mlp_modules(
 
         if target_names is not None:
             should_replace = any(
-                target_name in name
-                for target_name in target_names
-            )
+                target_name in name for target_name in target_names)
         elif module_type is not None:
             should_replace = isinstance(module, module_type)
         else:
             # Auto-detect MLP modules
             should_replace = (
-                (hasattr(module, 'gate_proj')
-                 and hasattr(module, 'up_proj')
-                 and hasattr(module, 'down_proj')) or
-                (hasattr(module, 'w1')
-                 and hasattr(module, 'w2')
-                 and hasattr(module, 'w3')) or
-                (hasattr(module, 'fc1')
-                 and hasattr(module, 'fc2'))
+                (
+                    hasattr(module, "gate_proj")
+                    and hasattr(module, "up_proj")
+                    and hasattr(module, "down_proj")
+                )
+                or (
+                    hasattr(module, "w1")
+                    and hasattr(module, "w2")
+                    and hasattr(module, "w3")
+                )
+                or (hasattr(module, "fc1") and hasattr(module, "fc2"))
             )
 
         if should_replace:
             print(f"Replacing module: {name} (type: {type(module).__name__})")
             return TritonSparseMLP(
-                module,
-                sparsity_ratio=sparsity_ratio,
-                use_triton=use_triton
+                module, sparsity_ratio=sparsity_ratio, use_triton=use_triton
             )
 
         # Recursively process children
         for child_name, child in module.named_children():
-            new_child = replace_module(child, f"{name}.{child_name}"
-                                       if name
-                                       else child_name)
+            new_child = replace_module(
+                child, f"{name}.{child_name}" if name else child_name
+            )
             if new_child is not None:
                 setattr(module, child_name, new_child)
 
@@ -388,9 +394,9 @@ def convert_llama_mlp(model: nn.Module,
 
     def convert_mlp(module):
         if (
-            hasattr(module, 'w1')
-            and hasattr(module, 'w2')
-            and hasattr(module, 'w3')
+            hasattr(module, "w1")
+            and hasattr(module, "w2")
+            and hasattr(module, "w3")
         ):
             print(f"Converting MLP: {type(module).__name__}")
             return TritonSparseMLP(module, sparsity_ratio=sparsity_ratio)
@@ -412,8 +418,10 @@ def convert_llama_mlp(model: nn.Module,
 
 # ============ EXAMPLE USAGE ============
 
+
 class LlamaMLP(nn.Module):
     """LLaMA-style MLP"""
+
     def __init__(self, dim: int = 4096, hidden_dim: int = 11008):
         super().__init__()
         self.w1 = nn.Linear(dim, hidden_dim, bias=False)
@@ -426,6 +434,7 @@ class LlamaMLP(nn.Module):
 
 class TransformerBlock(nn.Module):
     """Simple transformer block"""
+
     def __init__(self, dim: int = 4096):
         super().__init__()
         self.attention = nn.MultiheadAttention(dim, num_heads=32)
@@ -441,11 +450,12 @@ class TransformerBlock(nn.Module):
 
 class LargeLanguageModel(nn.Module):
     """Example LLM with multiple transformer blocks"""
+
     def __init__(self, num_layers: int = 32, dim: int = 4096):
         super().__init__()
         self.embed_tokens = nn.Embedding(32000, dim)
-        self.layers = nn.ModuleList([TransformerBlock(dim)
-                                     for _ in range(num_layers)])
+        self.layers = nn.ModuleList(
+            [TransformerBlock(dim) for _ in range(num_layers)])
         self.norm = nn.LayerNorm(dim)
         self.lm_head = nn.Linear(dim, 32000, bias=False)
 
@@ -458,9 +468,9 @@ class LargeLanguageModel(nn.Module):
 
 
 if __name__ == "__main__":
-    print("="*70)
+    print("=" * 70)
     print("Sparse MLP Module Replacement for LLMs")
-    print("="*70)
+    print("=" * 70)
 
     # Create a large model
     print("\n1. Creating original model...")
@@ -470,7 +480,7 @@ if __name__ == "__main__":
 
     # Count MLP modules
     mlp_count = sum(1 for _ in model.modules()
-                    if hasattr(_, 'w1') and hasattr(_, 'w2'))
+                    if hasattr(_, "w1") and hasattr(_, "w2"))
     print(f"   Found {mlp_count} MLP modules")
 
     # Replace with sparse MLPs
@@ -478,11 +488,13 @@ if __name__ == "__main__":
     sparse_model = replace_mlp_modules(
         model,
         sparsity_ratio=0.1,  # Keep only 10% of neurons
-        use_triton=False  # Use PyTorch fallback for testing
+        use_triton=False,  # Use PyTorch fallback for testing
     )
 
-    print(f"   New parameters: "
-          f"{sum(p.numel() for p in sparse_model.parameters()):,}")
+    print(
+        f"   New parameters: "
+        f"{sum(p.numel() for p in sparse_model.parameters()):,}"
+    )
 
     # Test forward/backward
     print("\n3. Testing forward/backward...")

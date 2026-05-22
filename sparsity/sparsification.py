@@ -1,7 +1,6 @@
 import torch
-from transformers.models.llama.modeling_llama import LlamaMLP
-from transformers.activations import ACT2FN
 import torch.nn as nn
+
 
 class SparseMLP(nn.Module):
     def __init__(self, base_layer, k=4096, n=None, m=None):
@@ -14,8 +13,8 @@ class SparseMLP(nn.Module):
         self.down_proj = base_layer.down_proj
         self.act_fn = base_layer.act_fn
         self.k_max = self.up_proj.in_features
-        self.k_min = self.up_proj.in_features//2
-        #TODO: check boundary and throw exception if needed
+        self.k_min = self.up_proj.in_features // 2
+        # TODO: check boundary and throw exception if needed
         self.n = None
         self.m = None
         self.k = k
@@ -42,9 +41,10 @@ class SparseMLP(nn.Module):
 
         down_proj = self.down_proj(act_out * up_out)
         return down_proj
-    
+
+
 class NMsparseMLP(nn.Module):
-    def __init__(self, base_layer, k=None, m = 2, n = 8):
+    def __init__(self, base_layer, k=None, m=2, n=8):
         super().__init__()
         self.config = base_layer.config
         self.hidden_size = base_layer.config.hidden_size
@@ -60,7 +60,7 @@ class NMsparseMLP(nn.Module):
     def forward(self, x):
         gate_out = self.gate_proj(x)
         sh0, sh1, sh2 = gate_out.shape
-        gate_out = gate_out.reshape(sh0 * sh1 * (sh2//self.n), self.n)
+        gate_out = gate_out.reshape(sh0 * sh1 * (sh2 // self.n), self.n)
         _, indices = torch.topk(gate_out, self.m, dim=-1, largest=True)
         mask = torch.zeros_like(gate_out, dtype=torch.bool)
         mask.scatter_(dim=-1, index=indices, value=True)
@@ -80,8 +80,9 @@ class NMsparseMLP(nn.Module):
         down_proj = self.down_proj(act_out * up_out)
         return down_proj
 
+
 def replace_nested_module(model, name, new_module):
-    parts = name.split('.')
+    parts = name.split(".")
     parent = model
     for part in parts[:-1]:
         parent = getattr(parent, part)
