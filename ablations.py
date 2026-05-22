@@ -6,15 +6,8 @@ from transformers.models.llama.modeling_llama import LlamaMLP
 from sparsity.triton_sparsity import TritonSparseMLP
 import math
 
-IMPORTANCE_RANKING = [27, 26, 25, 24, 23, 22,
-                      21, 20, 19, 18, 15, 17,
-                      16, 14, 13, 12, 11, 10,
-                      9, 7, 8, 6, 5, 4, 3,
-                      1, 2, 0]
-BEGIN = [0, 1, 2, 3, 4, 5]
-END = [22, 23, 24, 25, 26, 27]
-MIDDLE = [11, 12, 13, 14, 15, 16]
-BEGEND = [0, 1, 2, 25, 26, 27]
+from constants import (IMPORTANCE_RANKING,
+                       BEGIN, END, MIDDLE, BEGEND)
 
 
 def set_up_sparsification(
